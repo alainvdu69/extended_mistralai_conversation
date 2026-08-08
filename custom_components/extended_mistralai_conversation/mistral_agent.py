@@ -286,7 +286,7 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
         """Rend le prompt complet avec Jinja2."""
         template_vars = {
             "now": dt_util.now,
-            "exposed_entities": self._get_exposed_entities,
+            "exposed_entities": self._get_exposed_entities(),  # <-- résolu ici (liste), pas une référence de fonction — comme extended_openai_conversation, pas de () requis dans le prompt
             "areas": self._get_areas,
             "area_name": self._get_area_name,
             "states": self.hass.states.get,

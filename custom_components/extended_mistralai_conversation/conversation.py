@@ -33,10 +33,13 @@ def _load_tools_config(path: str) -> list[dict]:
 
 
 def _load_prompt_template(path: str) -> str:
-    """Charge le template de prompt depuis le fichier texte (fonction synchrone, à exécuter via l'executor)."""
+    """Charge et assemble le prompt (YAML static_prompt + dynamic_prompt) depuis le disque (fonction synchrone, à exécuter via l'executor)."""
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return f.read()
+            config = yaml.safe_load(f)
+        static_prompt = config.get("static_prompt", "")
+        dynamic_prompt = config.get("dynamic_prompt", "")
+        return f"{static_prompt}\n{dynamic_prompt}"
     except Exception as e:
         _LOGGER.error(f"Erreur lors du chargement de {path}: {e}")
         return ""

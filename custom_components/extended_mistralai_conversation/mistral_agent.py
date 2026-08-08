@@ -5,7 +5,6 @@ import json
 import logging
 from typing import Literal
 
-import yaml
 from homeassistant.components import conversation
 from homeassistant.components.conversation import (
     ConversationEntity,
@@ -30,20 +29,34 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
     _attr_supported_features = ConversationEntityFeature.CONTROL
     MAX_FUNCTION_CALLS = 5  # <-- garde-fou anti-boucle infinie (cf. jekalmin "Maximum Function Calls Per Conversation")
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, **kwargs):
-        """Initialize the Mistral conversation agent."""
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        api_key: str,
+        model: str,
+        tools: list[dict],
+        prompt_template: str,
+        allowed_domains: list[str],
+        allowed_services: dict,
+    ):
+        """Initialize the Mistral conversation agent.
+
+        tools et prompt_template sont déjà chargés depuis le disque par
+        async_setup_entry (conversation.py) via l'executor, pour ne jamais
+        faire d'I/O bloquant ici : __init__ ne peut pas être async, donc
+        aucun hass.async_add_executor_job n'est possible à cet endroit.
+        """
         super().__init__()
         self.hass = hass
         self.entry = entry  # <-- Stocke l'entrée de configuration
-        self.api_key = entry.data.get("api_key")
-        self.model = entry.options.get("model", "mistral-medium")
-        self.tools_config_path = entry.options.get("tools_config_path", "config/mistral_tools.yaml")
-        self.prompt_path = entry.options.get("prompt_path", "config/mistral_prompt.txt")
-        self.allowed_domains = entry.options.get("allowed_domains", [])
-        self.allowed_services = entry.options.get("allowed_services", {})
+        self.api_key = api_key
+        self.model = model
+        self.allowed_domains = allowed_domains
+        self.allowed_services = allowed_services
         self.session = async_get_clientsession(hass)  # <-- réutilise la session HA, pas de session orpheline non fermée
-        self.tools = self._load_tools_config()
-        self.prompt_template = self._load_prompt_template()
+        self.tools = tools
+        self.prompt_template = prompt_template
         self._attr_name = "Extended Mistral AI Conversation"
         self._attr_unique_id = f"mistral_agent_{entry.entry_id}"  # <-- Utilise entry.entry_id
 
@@ -61,25 +74,6 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
     def supported_languages(self) -> list[str] | Literal["*"]:
         """Retourne la liste des langues supportées par l'agent."""
         return ["fr"]
-
-    def _load_tools_config(self) -> list[dict]:
-        """Charge la configuration des tools depuis le fichier YAML."""
-        try:
-            with open(self.tools_config_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-                return config.get("tools", [])
-        except Exception as e:
-            _LOGGER.error(f"Erreur lors du chargement de {self.tools_config_path}: {e}")
-            return []
-
-    def _load_prompt_template(self) -> str:
-        """Charge le template de prompt depuis le fichier texte."""
-        try:
-            with open(self.prompt_path, "r", encoding="utf-8") as f:
-                return f.read()
-        except Exception as e:
-            _LOGGER.error(f"Erreur lors du chargement de {self.prompt_path}: {e}")
-            return ""
 
     def _get_exposed_entities(self) -> list[dict]:
         """Retourne la liste des entités exposées pour Assist."""

@@ -7,11 +7,8 @@ from typing import Any
 
 import aiohttp
 import yaml
-from homeassistant.components.conversation import (
-    ConversationEntity,
-    ConversationInput,
-    ConversationResult,
-)
+from homeassistant.components.conversation import ConversationEntity
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
 from homeassistant.helpers.template import Template
@@ -21,32 +18,22 @@ _LOGGER = logging.getLogger(__name__)
 class MistralConversationAgent(ConversationEntity):
     """Conversation agent for Mistral AI with dynamic prompt and tools."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        entry_id: str,
-        api_key: str,
-        model: str = "mistral-medium",
-        tools_config_path: str = "config/mistral_tools.yaml",
-        prompt_path: str = "config/mistral_prompt.txt",
-        allowed_domains: list[str] = None,
-        allowed_services: dict[str, list[str]] = None,
-    ):
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
         """Initialize the Mistral conversation agent."""
         super().__init__()
         self.hass = hass
-        self.entry_id = entry_id
-        self.api_key = api_key
-        self.model = model
-        self.tools_config_path = tools_config_path
-        self.prompt_path = prompt_path
-        self.allowed_domains = allowed_domains or []
-        self.allowed_services = allowed_services or {}
+        self.entry = entry  # <-- Stocke l'entrée de configuration
+        self.api_key = entry.data.get("api_key")
+        self.model = entry.options.get("model", "mistral-medium")
+        self.tools_config_path = entry.options.get("tools_config_path", "config/mistral_tools.yaml")
+        self.prompt_path = entry.options.get("prompt_path", "config/mistral_prompt.txt")
+        self.allowed_domains = entry.options.get("allowed_domains", [])
+        self.allowed_services = entry.options.get("allowed_services", {})
         self.session = aiohttp.ClientSession()
         self.tools = self._load_tools_config()
         self.prompt_template = self._load_prompt_template()
         self._attr_name = "Extended Mistral AI Conversation"
-        self._attr_unique_id = f"mistral_agent_{self.entry_id}"
+        self._attr_unique_id = f"mistral_agent_{entry.entry_id}"  # <-- Utilise entry.entry_id
 
     @property
     def name(self) -> str:
@@ -119,8 +106,9 @@ class MistralConversationAgent(ConversationEntity):
         """Appelé quand l'entité est ajoutée à Home Assistant."""
         await super().async_added_to_hass()
 
-    async def async_conversation_run(self, input: ConversationInput) -> ConversationResult:
+    async def async_conversation_run(self, input: Any) -> Any:
         """Traite une requête de conversation."""
+        from homeassistant.components.conversation import ConversationInput, ConversationResult
         user_input = input.context.get("user_input", {})
         rendered_prompt = await self._render_prompt(user_input)
 
@@ -186,7 +174,7 @@ class MistralConversationAgent(ConversationEntity):
                         )
 
                     else:
-                        # Gérer les autres tools (assist_timer, add_event, etc.)
+                        # Gérer les autres outils (assist_timer, add_event, etc.)
                         tool_config = next(
                             (t for t in self.tools if t["name"] == function_name),
                             None
@@ -262,4 +250,3 @@ class MistralConversationAgent(ConversationEntity):
 
         template = Template(self.prompt_template)
         return template.async_render(variables=template_vars)
-        

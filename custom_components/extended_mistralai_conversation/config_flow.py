@@ -36,10 +36,6 @@ class MistralAIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     {
                         vol.Required("api_key"): str,
                         vol.Optional("model", default=DEFAULT_MODEL): str,
-                        vol.Optional("tools_config_path", default=DEFAULT_TOOLS_CONFIG_PATH): str,
-                        vol.Optional("prompt_path", default=DEFAULT_PROMPT_PATH): str,
-                        vol.Optional("allowed_domains", default=DEFAULT_ALLOWED_DOMAINS): list,
-                        vol.Optional("allowed_services", default=DEFAULT_ALLOWED_SERVICES): dict,
                     }
                 ),
             )
@@ -49,10 +45,10 @@ class MistralAIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data={"api_key": user_input["api_key"]},
             options={
                 "model": user_input.get("model", DEFAULT_MODEL),
-                "tools_config_path": user_input.get("tools_config_path", DEFAULT_TOOLS_CONFIG_PATH),
-                "prompt_path": user_input.get("prompt_path", DEFAULT_PROMPT_PATH),
-                "allowed_domains": user_input.get("allowed_domains", DEFAULT_ALLOWED_DOMAINS),
-                "allowed_services": user_input.get("allowed_services", DEFAULT_ALLOWED_SERVICES),
+                "tools_config_path": DEFAULT_TOOLS_CONFIG_PATH,
+                "prompt_path": DEFAULT_PROMPT_PATH,
+                "allowed_domains": DEFAULT_ALLOWED_DOMAINS,
+                "allowed_services": DEFAULT_ALLOWED_SERVICES,
             }
         )
 

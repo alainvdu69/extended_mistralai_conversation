@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.conversation import ConversationEntityFeature
+import yaml
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -19,6 +19,28 @@ from .const import (
 from .mistral_agent import MistralConversationAgent
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _load_tools_config(path: str) -> list[dict]:
+    """Charge la configuration des tools depuis le fichier YAML (fonction synchrone, à exécuter via l'executor)."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            return config.get("tools", [])
+    except Exception as e:
+        _LOGGER.error(f"Erreur lors du chargement de {path}: {e}")
+        return []
+
+
+def _load_prompt_template(path: str) -> str:
+    """Charge le template de prompt depuis le fichier texte (fonction synchrone, à exécuter via l'executor)."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        _LOGGER.error(f"Erreur lors du chargement de {path}: {e}")
+        return ""
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -37,13 +59,18 @@ async def async_setup_entry(
         _LOGGER.error("API key for Mistral AI is not configured.")
         return
 
+    # Lecture disque effectuée ici, hors du constructeur de l'entité,
+    # via l'executor pour ne pas bloquer la boucle asyncio (cf. avertissement HA)
+    tools = await hass.async_add_executor_job(_load_tools_config, tools_config_path)
+    prompt_template = await hass.async_add_executor_job(_load_prompt_template, prompt_path)
+
     agent = MistralConversationAgent(
         hass=hass,
         entry=entry,
         api_key=api_key,
         model=model,
-        tools_config_path=tools_config_path,
-        prompt_path=prompt_path,
+        tools=tools,
+        prompt_template=prompt_template,
         allowed_domains=allowed_domains,
         allowed_services=allowed_services,
     )

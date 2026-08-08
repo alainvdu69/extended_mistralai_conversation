@@ -2,15 +2,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
-from homeassistant.components.conversation import (
-    ConversationEntity,
-    ConversationEntityFeature,
-)
+from homeassistant.components.conversation import ConversationEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import async_get_platform
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     DOMAIN,
@@ -24,7 +20,11 @@ from .mistral_agent import MistralConversationAgent
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,  # <-- 3e argument requis par HA
+) -> None:
     """Set up the Mistral AI conversation platform."""
     api_key = entry.data.get("api_key")
     model = entry.options.get("model", DEFAULT_MODEL)
@@ -35,11 +35,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not api_key:
         _LOGGER.error("API key for Mistral AI is not configured.")
-        return False
+        return
 
     agent = MistralConversationAgent(
         hass=hass,
-        entry_id=entry.entry_id,
+        entry=entry,
         api_key=api_key,
         model=model,
         tools_config_path=tools_config_path,
@@ -48,8 +48,5 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         allowed_services=allowed_services,
     )
 
-    # Ajouter l'agent comme entité de conversation
-    platform = await async_get_platform(hass, "conversation")
-    await platform.async_add_entities([agent])
-
-    return True
+    # Utiliser le callback fourni par HA, pas de contournement manuel
+    async_add_entities([agent])

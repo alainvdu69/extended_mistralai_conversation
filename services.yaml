@@ -1,0 +1,6 @@
+# services.yaml (optionnel)
+get_tools:
+  name: Get Mistral Tools
+  description: Récupère la liste des tools configurés pour Mistral.
+  fields:
+    # Pas de champs nécessaires

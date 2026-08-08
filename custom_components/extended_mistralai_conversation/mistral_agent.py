@@ -179,7 +179,8 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
         payload = {
             "model": self.model,
             "messages": messages,
-            "tools": mistral_tools
+            "tools": mistral_tools,
+            "prompt_cache_key": self._attr_unique_id,  # <-- clé stable par agent (pas par conversation) : maximise les hits sur le préfixe statique du prompt, identique entre toutes les conversations
         }
 
         async with self.session.post(

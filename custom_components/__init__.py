@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.components.conversation import async_register_agent
 
 from .const import (
     DOMAIN,
@@ -39,7 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     agent = MistralConversationAgent(
         hass=hass,
-        entry_id=entry.entry_id,  # <-- Passe entry.entry_id ici
+        entry_id=entry.entry_id,
         api_key=api_key,
         model=model,
         tools_config_path=tools_config_path,
@@ -48,11 +49,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         allowed_services=allowed_services,
     )
 
-    await hass.helpers.entity_platform.async_get_platform("conversation").async_add_entities([agent])
+    # Enregistrer l'agent via async_register_agent
+    await async_register_agent(hass, agent)
+
     _LOGGER.info("Mistral AI Conversation Agent initialized successfully.")
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     return True
-    

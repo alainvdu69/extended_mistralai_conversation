@@ -3,20 +3,29 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 
 import aiohttp
 import yaml
-from homeassistant.components.conversation import ConversationEntity
+from homeassistant.components import conversation
+from homeassistant.components.conversation import (
+    ConversationEntity,
+    ConversationInput,
+    ConversationResult,
+)
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.template import Template
 
 _LOGGER = logging.getLogger(__name__)
 
-class MistralConversationAgent(ConversationEntity):
+class MistralConversationAgent(ConversationEntity, conversation.AbstractConversationAgent):
     """Conversation agent for Mistral AI with dynamic prompt and tools."""
+
+    _attr_supported_features = ConversationEntityFeature.CONTROL
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
         """Initialize the Mistral conversation agent."""

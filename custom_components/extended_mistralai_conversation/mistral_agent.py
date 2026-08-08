@@ -24,7 +24,7 @@ class MistralConversationAgent(ConversationEntity):
     def __init__(
         self,
         hass: HomeAssistant,
-        entry_id: str,  # <-- Ajout de entry_id
+        entry_id: str,
         api_key: str,
         model: str = "mistral-medium",
         tools_config_path: str = "config/mistral_tools.yaml",
@@ -35,7 +35,7 @@ class MistralConversationAgent(ConversationEntity):
         """Initialize the Mistral conversation agent."""
         super().__init__()
         self.hass = hass
-        self.entry_id = entry_id  # <-- Stocke entry_id
+        self.entry_id = entry_id
         self.api_key = api_key
         self.model = model
         self.tools_config_path = tools_config_path
@@ -46,7 +46,7 @@ class MistralConversationAgent(ConversationEntity):
         self.tools = self._load_tools_config()
         self.prompt_template = self._load_prompt_template()
         self._attr_name = "Extended Mistral AI Conversation"
-        self._attr_unique_id = f"mistral_agent_{self.entry_id}"  # <-- Utilise self.entry_id
+        self._attr_unique_id = f"mistral_agent_{self.entry_id}"
 
     @property
     def name(self) -> str:

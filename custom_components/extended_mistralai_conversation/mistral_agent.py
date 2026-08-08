@@ -7,10 +7,13 @@ from typing import Literal
 
 from homeassistant.components import conversation
 from homeassistant.components.conversation import (
+    AssistantContent,
     ConversationEntity,
     ConversationEntityFeature,
     ConversationInput,
     ConversationResult,
+    SystemContent,
+    async_get_chat_log,
 )
 from homeassistant.components.homeassistant.exposed_entities import async_should_expose
 from homeassistant.config_entries import ConfigEntry
@@ -20,6 +23,7 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import intent
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.chat_session import async_get_chat_session
 from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
 
@@ -128,24 +132,33 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
 
     async def async_process(self, user_input: ConversationInput) -> ConversationResult:
         """Point d'entrée appelé par Home Assistant."""
-        intent_response = intent.IntentResponse(language=user_input.language)
-        try:
-            speech = await self._async_conversation_run(user_input)
-            intent_response.async_set_speech(speech)
-        except Exception as e:
-            _LOGGER.error(f"Erreur avec Mistral API: {e}")
-            intent_response.async_set_error(
-                intent.IntentResponseErrorCode.UNKNOWN,
-                "Désolé, une erreur est survenue avec Mistral AI.",
-            )
-        return ConversationResult(
-            response=intent_response,
-            conversation_id=user_input.conversation_id,
-        )
+        with (
+            async_get_chat_session(self.hass, user_input.conversation_id) as session,
+            async_get_chat_log(self.hass, session, user_input) as chat_log,
+        ):
+            intent_response = intent.IntentResponse(language=user_input.language)
+            try:
+                rendered_prompt = await self._render_prompt(user_input)
+                chat_log.content[0] = SystemContent(content=rendered_prompt)  # <-- rend le prompt visible dans le debug Assist
 
-    async def _async_conversation_run(self, user_input: ConversationInput) -> str:
+                speech = await self._async_conversation_run(user_input, rendered_prompt)
+                chat_log.async_add_assistant_content_without_tools(
+                    AssistantContent(agent_id=self.entity_id, content=speech)
+                )  # <-- sans ça, HA jette le chat_log car "aucun contenu assistant ajouté" (voir chat_log.py:131)
+                intent_response.async_set_speech(speech)
+            except Exception as e:
+                _LOGGER.error(f"Erreur avec Mistral API: {e}")
+                intent_response.async_set_error(
+                    intent.IntentResponseErrorCode.UNKNOWN,
+                    "Désolé, une erreur est survenue avec Mistral AI.",
+                )
+            return ConversationResult(
+                response=intent_response,
+                conversation_id=user_input.conversation_id,
+            )
+
+    async def _async_conversation_run(self, user_input: ConversationInput, rendered_prompt: str) -> str:
         """Traite une requête de conversation et renvoie le texte final formulé par Mistral."""
-        rendered_prompt = await self._render_prompt(user_input)
         mistral_tools = [self._convert_to_mistral_tool(tool) for tool in self.tools]
 
         messages = [

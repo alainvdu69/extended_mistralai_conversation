@@ -1,4 +1,4 @@
-# Extended OpenAI Conversation
+# Extended MistalAI Conversation
 This is custom component of Home Assistant.
 
 Derived from [Extended OpenAI Conversation]([https://www.home-assistant.io/integrations/openai_conversation/](https://github.com/jekalmin/extended_openai_conversation) and adapted to specific Mistal AI
@@ -9,8 +9,9 @@ Derived from [Extended OpenAI Conversation]([https://www.home-assistant.io/integ
 - Ability to retrieve state history of entities
 
 ## How it works
-Extended Mistrail AI Conversation uses Mistal AI API's feature of [function calling](https://platform.openai.com/docs/guides/function-calling) to call service of Home Assistant.
+Extended Mistrail AI Conversation uses Mistal AI API's feature like https://api.mistral.ai/v1/chat/completions .
 
+--> to be updated
 Since OpenAI models already know how to call service of Home Assistant in general, you just have to let model know what devices you have by [exposing entities](https://github.com/jekalmin/extended_openai_conversation#preparation)
 
 ## Installation

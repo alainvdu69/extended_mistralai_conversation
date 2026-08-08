@@ -19,6 +19,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.template import Template
+from homeassistant.helpers import area_registry as ar
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +40,7 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
         self.prompt_path = entry.options.get("prompt_path", "config/mistral_prompt.txt")
         self.allowed_domains = entry.options.get("allowed_domains", [])
         self.allowed_services = entry.options.get("allowed_services", {})
-        self.session = aiohttp.ClientSession()
+        self.session = async_get_clientsession(hass)
         self.tools = self._load_tools_config()
         self.prompt_template = self._load_prompt_template()
         self._attr_name = "Extended Mistral AI Conversation"
@@ -58,6 +60,33 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
     def supported_languages(self) -> list[str]:
         """Retourne la liste des langues supportées par l'agent."""
         return ["fr"]
+
+    async def async_added_to_hass(self) -> None:
+        """Appelé quand l'entité est ajoutée à Home Assistant."""
+        await super().async_added_to_hass()
+        conversation.async_set_agent(self.hass, self.entry, self)  # <-- rend l'agent sélectionnable dans Assist
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Appelé quand l'entité est retirée."""
+        conversation.async_unset_agent(self.hass, self.entry)
+        await super().async_will_remove_from_hass()
+
+    async def async_process(self, user_input: ConversationInput) -> ConversationResult:
+        """Point d'entrée appelé par Home Assistant — délègue à votre logique existante."""
+        intent_response = intent.IntentResponse(language=user_input.language)
+        try:
+            speech = await self._async_conversation_run(user_input)
+            intent_response.async_set_speech(speech)
+        except Exception as err:  # remplace vos anciens ConversationResult(response_type=..., speech=...)
+            _LOGGER.error("Erreur avec Mistral API: %s", err)
+            intent_response.async_set_error(
+                intent.IntentResponseErrorCode.UNKNOWN,
+                "Désolé, une erreur est survenue avec Mistral AI.",
+            )
+        return ConversationResult(
+            response=intent_response,
+            conversation_id=user_input.conversation_id,
+        )
 
     def _load_tools_config(self) -> list[dict]:
         """Charge la configuration des tools depuis le fichier YAML."""
@@ -93,11 +122,11 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
 
     def _get_areas(self) -> list[str]:
         """Retourne la liste des area_id."""
-        return list(self.hass.helpers.area_registry.async_get_areas().keys())
+        return list(ar.async_get(self.hass).areas)
 
     def _get_area_name(self, area_id: str) -> str:
         """Retourne le nom d'une area à partir de son ID."""
-        area = self.hass.helpers.area_registry.async_get_area(area_id)
+        area = ar.async_get(self.hass).async_get_area(area_id)
         return area.name if area else "Inconnu"
 
     def _convert_to_mistral_tool(self, tool_config: dict) -> dict:
@@ -115,7 +144,7 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
         """Appelé quand l'entité est ajoutée à Home Assistant."""
         await super().async_added_to_hass()
 
-    async def async_conversation_run(self, input: Any) -> Any:
+    async def _async_conversation_run(self, input: Any) -> Any:
         """Traite une requête de conversation."""
         from homeassistant.components.conversation import ConversationInput, ConversationResult
         user_input = input.context.get("user_input", {})
@@ -146,7 +175,7 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
             ) as response:
                 response_data = await response.json()
 
-                # Vérifier si Mistral a appelé une fonction
+# Vérifier si Mistral a appelé une fonction
                 if "tool_calls" in response_data["choices"][0]:
                     tool_call = response_data["choices"][0]["tool_calls"][0]
                     function_name = tool_call["function"]["name"]
@@ -159,16 +188,10 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
                             service = service_call["service"]
 
                             if domain not in self.allowed_domains:
-                                return ConversationResult(
-                                    response_type=intent.IntentResponseType.ERROR,
-                                    speech=f"Désolé, le domaine {domain} n'est pas autorisé."
-                                )
+                                return f"Désolé, le domaine {domain} n'est pas autorisé."
 
                             if service not in self.allowed_services.get(domain, []):
-                                return ConversationResult(
-                                    response_type=intent.IntentResponseType.ERROR,
-                                    speech=f"Désolé, le service {service} pour le domaine {domain} n'est pas autorisé."
-                                )
+                                return f"Désolé, le service {service} pour le domaine {domain} n'est pas autorisé."
 
                             # Exécuter le service
                             service_data = service_call.get("service_data", {})
@@ -178,9 +201,7 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
                                 service_data
                             )
 
-                        return ConversationResult(
-                            response_type=intent.IntentResponseType.ACTION_DONE
-                        )
+                        return "C'est fait."
 
                     else:
                         # Gérer les autres outils (assist_timer, add_event, etc.)
@@ -189,10 +210,7 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
                             None
                         )
                         if not tool_config:
-                            return ConversationResult(
-                                response_type=intent.IntentResponseType.ERROR,
-                                speech=f"Tool {function_name} non trouvé."
-                            )
+                            return f"Tool {function_name} non trouvé."
 
                         rendered_data = self._render_template(
                             tool_config["function"]["sequence"][0]["data"],
@@ -212,22 +230,14 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
                                 rendered_data
                             )
 
-                        return ConversationResult(
-                            response_type=intent.IntentResponseType.ACTION_DONE
-                        )
+                        return "C'est fait."
 
                 # Réponse textuelle
-                return ConversationResult(
-                    response_type=intent.IntentResponseType.QUERY_ANSWER,
-                    speech=response_data["choices"][0]["message"]["content"]
-                )
+                return response_data["choices"][0]["message"]["content"]
 
         except Exception as e:
             _LOGGER.error(f"Erreur avec Mistral API: {e}")
-            return ConversationResult(
-                response_type=intent.IntentResponseType.ERROR,
-                speech="Désolé, une erreur est survenue avec Mistral AI."
-            )
+            return "<le texte>"
 
     def _render_template(self, template_data: dict, arguments: dict) -> dict:
         """Rend un template Jinja2 avec les arguments fournis."""
@@ -249,7 +259,7 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
             user_input = {}
 
         template_vars = {
-            "now": self.hass.helpers.now,
+            "now": dt_util.now,
             "exposed_entities": self._get_exposed_entities,
             "areas": self._get_areas,
             "area_name": self._get_area_name,

@@ -4,7 +4,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.conversation import ConversationEntity
+from homeassistant.components.conversation import (
+    ConversationEntity,
+    ConversationEntityFeature,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import async_get_platform
@@ -45,7 +48,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         allowed_services=allowed_services,
     )
 
-    # Obtenir la plateforme conversation et ajouter l'agent
+    # Ajouter l'agent comme entité de conversation
     platform = await async_get_platform(hass, "conversation")
     await platform.async_add_entities([agent])
 

@@ -12,10 +12,12 @@ from homeassistant.components.conversation import (
     ConversationInput,
     ConversationResult,
 )
+from homeassistant.components.homeassistant.exposed_entities import async_should_expose
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import intent
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.template import Template
@@ -77,15 +79,21 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
 
     def _get_exposed_entities(self) -> list[dict]:
         """Retourne la liste des entités exposées pour Assist."""
+        entity_registry = er.async_get(self.hass)
         exposed = []
-        for entity in self.hass.states.async_all():
-            if entity.attributes.get("assist", False):
-                exposed.append({
-                    "entity_id": entity.entity_id,
-                    "name": entity.attributes.get("friendly_name", entity.entity_id),
-                    "state": entity.state,
-                    "aliases": entity.attributes.get("aliases", [])
-                })
+        for state in self.hass.states.async_all():
+            if not async_should_expose(self.hass, conversation.DOMAIN, state.entity_id):
+                continue  # <-- l'exposition Assist se lit via le registre d'entités, pas via state.attributes
+
+            entity = entity_registry.async_get(state.entity_id)
+            aliases = [str(a) for a in entity.aliases] if entity and entity.aliases else []
+
+            exposed.append({
+                "entity_id": state.entity_id,
+                "name": state.name,
+                "state": state.state,
+                "aliases": aliases
+            })
         return exposed
 
     def _get_areas(self) -> list[str]:

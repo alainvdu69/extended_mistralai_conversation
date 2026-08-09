@@ -1,6 +1,33 @@
-# services.yaml (optionnel)
 get_tools:
   name: Get Mistral Tools
   description: Récupère la liste des tools configurés pour Mistral.
   fields:
     # Pas de champs nécessaires
+
+export_options:
+  name: Exporter les options
+  description: >-
+    Exporte les options actuelles (modèle, chemins, domaines/services autorisés)
+    vers un fichier JSON. La clé API n'est jamais incluse.
+  fields:
+    path:
+      name: Chemin du fichier
+      description: Chemin complet du fichier JSON de destination.
+      required: false
+      example: "/backup/extended_mistralai_conversation_options.json"
+      selector:
+        text:
+
+import_options:
+  name: Importer les options
+  description: >-
+    Recharge les options depuis un fichier JSON précédemment exporté et
+    redémarre automatiquement l'intégration.
+  fields:
+    path:
+      name: Chemin du fichier
+      description: Chemin complet du fichier JSON à importer.
+      required: false
+      example: "/backup/extended_mistralai_conversation_options.json"
+      selector:
+        text:

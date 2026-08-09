@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import yaml
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -20,16 +22,97 @@ from .mistral_agent import MistralConversationAgent
 
 _LOGGER = logging.getLogger(__name__)
 
+NOTIFICATION_ID = "extended_mistralai_conversation_tools_error"
+
+# Types de fonctions supportés par functions/__init__.py (FUNCTIONS) — tenu à jour manuellement,
+# sqlite/bash/read_file/write_file volontairement laissés de côté pour le moment.
+SUPPORTED_FUNCTION_TYPES = {"native", "script", "template", "rest", "scrape", "composite"}
+
+# Clés minimales attendues dans function_config selon le type, pour détecter au chargement
+# les erreurs qui sinon ne se révéleraient qu'au moment où le LLM tente d'appeler l'outil
+REQUIRED_FUNCTION_KEYS = {
+    "native": ["name"],
+    "script": ["sequence"],
+    "template": ["value_template"],
+    "rest": ["resource"],
+    "scrape": ["resource", "sensor"],
+    "composite": ["sequence"],
+}
+
+
+class ToolsConfigError(Exception):
+    """Erreur de configuration dans mistral_tools.yaml (syntaxe ou structure)."""
+
+
+def _validate_tool(index: int, tool: dict[str, Any]) -> list[str]:
+    """Valide un tool et renvoie la liste des erreurs trouvées (vide si tout va bien)."""
+    errors: list[str] = []
+    label = f"tool #{index}"
+
+    if not isinstance(tool, dict):
+        return [f"{label} : doit être un mapping YAML, trouvé {type(tool).__name__}"]
+
+    name = tool.get("name")
+    if not name:
+        errors.append(f"{label} : clé 'name' manquante")
+    else:
+        label = f"tool '{name}'"
+
+    if "description" not in tool:
+        errors.append(f"{label} : clé 'description' manquante")
+
+    function_config = tool.get("function")
+    if not isinstance(function_config, dict):
+        errors.append(f"{label} : clé 'function' manquante ou n'est pas un mapping")
+        return errors
+
+    function_type = function_config.get("type")
+    if function_type not in SUPPORTED_FUNCTION_TYPES:
+        errors.append(
+            f"{label} : function.type '{function_type}' inconnu ou non supporté "
+            f"(supportés : {', '.join(sorted(SUPPORTED_FUNCTION_TYPES))})"
+        )
+        return errors
+
+    for required_key in REQUIRED_FUNCTION_KEYS[function_type]:
+        if required_key not in function_config:
+            errors.append(f"{label} : function.{required_key} manquant (requis pour le type '{function_type}')")
+
+    return errors
+
 
 def _load_tools_config(path: str) -> list[dict]:
-    """Charge la configuration des tools depuis le fichier YAML (fonction synchrone, à exécuter via l'executor)."""
+    """Charge et valide mistral_tools.yaml (fonction synchrone, à exécuter via l'executor).
+
+    Lève ToolsConfigError avec un message détaillé en cas de problème, plutôt que
+    d'avaler l'erreur et de démarrer silencieusement avec zéro tool.
+    """
     try:
         with open(path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
-            return config.get("tools", [])
-    except Exception as e:
-        _LOGGER.error(f"Erreur lors du chargement de {path}: {e}")
-        return []
+    except OSError as e:
+        raise ToolsConfigError(f"Impossible de lire {path} : {e}") from e
+    except yaml.YAMLError as e:
+        raise ToolsConfigError(f"Erreur de syntaxe YAML dans {path} :\n{e}") from e
+
+    if config is None:
+        raise ToolsConfigError(f"{path} est vide ou ne contient pas de clé 'tools'.")
+
+    tools = config.get("tools")
+    if not isinstance(tools, list):
+        raise ToolsConfigError(f"{path} : la clé 'tools' doit être une liste, trouvé {type(tools).__name__}.")
+
+    all_errors: list[str] = []
+    for index, tool in enumerate(tools):
+        all_errors.extend(_validate_tool(index, tool))
+
+    if all_errors:
+        raise ToolsConfigError(
+            f"{len(all_errors)} erreur(s) dans {path} :\n" + "\n".join(f"  - {e}" for e in all_errors)
+        )
+
+    _LOGGER.info("%s : %d tool(s) chargé(s) avec succès depuis %s", DOMAIN, len(tools), path)
+    return tools
 
 
 def _load_prompt_template(path: str) -> str:
@@ -48,7 +131,7 @@ def _load_prompt_template(path: str) -> str:
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,  # <-- 3e argument requis par HA
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Mistral AI conversation platform."""
     api_key = entry.data.get("api_key")
@@ -62,10 +145,26 @@ async def async_setup_entry(
         _LOGGER.error("API key for Mistral AI is not configured.")
         return
 
-    # Lecture disque effectuée ici, hors du constructeur de l'entité,
-    # via l'executor pour ne pas bloquer la boucle asyncio (cf. avertissement HA)
-    tools = await hass.async_add_executor_job(_load_tools_config, tools_config_path)
     prompt_template = await hass.async_add_executor_job(_load_prompt_template, prompt_path)
+
+    try:
+        tools = await hass.async_add_executor_job(_load_tools_config, tools_config_path)
+    except ToolsConfigError as e:
+        # Visible dans l'UI (cloche de notifications HA), pas seulement dans les logs.
+        # L'agent démarre quand même, avec zéro tool, plutôt que de bloquer toute la conversation.
+        persistent_notification.async_create(
+            hass,
+            f"L'agent Mistral a démarré **sans aucun outil** (impossible d'utiliser assist_timer, "
+            f"add_event, etc.) car son chargement a échoué :\n\n```\n{e}\n```\n\n"
+            f"Corrigez `{tools_config_path}` puis rechargez l'intégration.",
+            title="Extended Mistral AI Conversation — erreur de configuration",
+            notification_id=NOTIFICATION_ID,
+        )
+        _LOGGER.error(str(e))
+        tools = []
+    else:
+        # En cas de succès après une précédente erreur, on efface la notification devenue obsolète
+        persistent_notification.async_dismiss(hass, NOTIFICATION_ID)
 
     agent = MistralConversationAgent(
         hass=hass,
@@ -78,5 +177,4 @@ async def async_setup_entry(
         allowed_services=allowed_services,
     )
 
-    # Utiliser le callback fourni par HA, pas de contournement manuel
     async_add_entities([agent])

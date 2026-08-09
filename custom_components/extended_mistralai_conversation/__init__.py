@@ -1,33 +1,84 @@
 """Mistral AI Conversation Agent for Home Assistant 2026.7.2."""
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN
+from .backup import read_json, write_json
+from .const import DOMAIN, DEFAULT_BACKUP_PATH
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["conversation"]
 
+SERVICE_EXPORT_OPTIONS = "export_options"
+SERVICE_IMPORT_OPTIONS = "import_options"
+
+SERVICE_PATH_SCHEMA = vol.Schema(
+    {vol.Optional("path", default=DEFAULT_BACKUP_PATH): cv.string}
+)
+
+
+def _get_single_entry(hass: HomeAssistant) -> ConfigEntry:
+    """Retourne l'unique config entry de cette intégration (erreur claire sinon)."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        raise ServiceValidationError("Aucune intégration Extended Mistral AI Conversation configurée.")
+    if len(entries) > 1:
+        raise ServiceValidationError(
+            "Plusieurs intégrations Extended Mistral AI Conversation trouvées : ce service ne gère qu'une seule entrée."
+        )
+    return entries[0]
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up via configuration.yaml (legacy)."""
+    """Set up via configuration.yaml (legacy) + enregistrement des services (secours manuel)."""
+
+    async def _handle_export(call: ServiceCall) -> None:
+        entry = _get_single_entry(hass)
+        path = call.data["path"]
+        # data (api_key) volontairement exclu : /backup peut être synchronisé
+        # vers un cloud, on ne veut pas y laisser le token en clair.
+        try:
+            await hass.async_add_executor_job(write_json, path, dict(entry.options))
+        except OSError as e:
+            raise ServiceValidationError(f"Écriture impossible vers {path} : {e}") from e
+        _LOGGER.info("Options Extended Mistral AI Conversation exportées vers %s", path)
+
+    async def _handle_import(call: ServiceCall) -> None:
+        entry = _get_single_entry(hass)
+        path = call.data["path"]
+        try:
+            options = await hass.async_add_executor_job(read_json, path)
+        except (OSError, json.JSONDecodeError) as e:
+            raise ServiceValidationError(f"Lecture impossible depuis {path} : {e}") from e
+        if not isinstance(options, dict):
+            raise ServiceValidationError(f"Le fichier {path} ne contient pas un objet JSON valide.")
+        hass.config_entries.async_update_entry(entry, options=options)
+        _LOGGER.info("Options Extended Mistral AI Conversation importées depuis %s", path)
+
+    hass.services.async_register(DOMAIN, SERVICE_EXPORT_OPTIONS, _handle_export, schema=SERVICE_PATH_SCHEMA)
+    hass.services.async_register(DOMAIN, SERVICE_IMPORT_OPTIONS, _handle_import, schema=SERVICE_PATH_SCHEMA)
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the Mistral AI conversation agent from a config entry."""
     # Déléguer la configuration à la plateforme conversation
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    # Recharge l'intégration si les options sont modifiées via l'Options Flow
+    # Recharge l'intégration si les options sont modifiées (Options Flow ou import_options)
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     return True
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Recharge l'entrée quand les options changent (Options Flow)."""
+    """Recharge l'entrée quand les options changent."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

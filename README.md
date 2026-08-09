@@ -1,4 +1,4 @@
-# Extended MistalAI Conversation
+# Extended Mistal AI Conversation
 This is a custom component for Home Assistant.
 
 Derived from [Extended OpenAI Conversation]([https://www.home-assistant.io/integrations/openai_conversation/](https://github.com/jekalmin/extended_openai_conversation) and adapted to specific Mistal AI API

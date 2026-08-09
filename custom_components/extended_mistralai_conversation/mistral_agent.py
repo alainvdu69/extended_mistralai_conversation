@@ -13,6 +13,7 @@ from homeassistant.components.conversation import (
     ConversationInput,
     ConversationResult,
     SystemContent,
+    ToolResultContent,
     async_get_chat_log,
 )
 from homeassistant.components.homeassistant.exposed_entities import async_should_expose
@@ -22,6 +23,7 @@ from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import intent
+from homeassistant.helpers import llm
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.chat_session import async_get_chat_session
 from homeassistant.helpers.template import Template
@@ -167,17 +169,24 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
 
         # chat_log.content contient : le system prompt courant (position 0, toujours à jour),
         # tous les tours précédents (user/assistant) de cette même conversation_id, et le tour
-        # utilisateur courant (ajouté automatiquement par async_get_chat_log avant qu'on arrive ici)
+        # utilisateur courant (ajouté automatiquement par async_get_chat_log avant qu'on arrive ici).
+        # getattr(..., "content", None) exclut proprement les ToolResultContent (pas d'attribut
+        # "content", ils ont "tool_result") sans avoir à importer UserContent pour un isinstance().
         messages = [
             {"role": content.role, "content": content.content}
             for content in chat_log.content
-            if content.content
+            if getattr(content, "content", None)
         ]
 
-        return await self._query_mistral(messages, mistral_tools, n_calls=0, context=context)
+        return await self._query_mistral(messages, mistral_tools, n_calls=0, context=context, chat_log=chat_log)
 
     async def _query_mistral(
-        self, messages: list[dict], mistral_tools: list[dict], n_calls: int, context: Context | None
+        self,
+        messages: list[dict],
+        mistral_tools: list[dict],
+        n_calls: int,
+        context: Context | None,
+        chat_log,
     ) -> str:
         """Appelle Mistral, exécute les tool_calls demandés, et relance jusqu'à obtenir une réponse texte."""
         headers = {
@@ -212,19 +221,41 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
         # L'historique doit inclure le message assistant contenant les tool_calls avant les réponses "tool"
         messages.append(message)
 
-        for tool_call in tool_calls:
-            function_name = tool_call["function"]["name"]
-            arguments = json.loads(tool_call["function"]["arguments"])
-            result_text = await self._execute_function(function_name, arguments, context)
+        # Rend l'appel de fonction visible dans le debug Assist (events intent-progress).
+        # external=True : on exécute nous-mêmes ces tool_calls (pas via l'API llm interne de HA),
+        # c'est la condition exigée par async_add_assistant_content_without_tools pour les accepter.
+        tool_inputs = [
+            llm.ToolInput(
+                id=tool_call["id"],
+                tool_name=tool_call["function"]["name"],
+                tool_args=json.loads(tool_call["function"]["arguments"]),
+                external=True,
+            )
+            for tool_call in tool_calls
+        ]
+        chat_log.async_add_assistant_content_without_tools(
+            AssistantContent(agent_id=self.entity_id, content=message.get("content"), tool_calls=tool_inputs)
+        )
+
+        for tool_call, tool_input in zip(tool_calls, tool_inputs):
+            result_text = await self._execute_function(tool_input.tool_name, tool_input.tool_args, context)
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call["id"],
-                "name": function_name,
+                "name": tool_input.tool_name,
                 "content": result_text,
             })
+            chat_log.async_add_assistant_content_without_tools(
+                ToolResultContent(
+                    agent_id=self.entity_id,
+                    tool_call_id=tool_input.id,
+                    tool_name=tool_input.tool_name,
+                    tool_result={"result": result_text},
+                )
+            )
 
         # On relance Mistral avec les résultats, pour qu'il formule la réponse finale
-        return await self._query_mistral(messages, mistral_tools, n_calls + 1, context)
+        return await self._query_mistral(messages, mistral_tools, n_calls + 1, context, chat_log)
 
     async def _execute_function(self, function_name: str, arguments: dict, context: Context | None) -> str:
         """Trouve la config du tool et délègue à l'exécuteur du type correspondant (native/script/template/rest/scrape/composite)."""

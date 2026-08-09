@@ -12,7 +12,7 @@ Derived from [Extended OpenAI Conversation]([https://www.home-assistant.io/integ
 Extended Mistrail AI Conversation uses Mistal AI API's feature like https://api.mistral.ai/v1/chat/completions .
 
 ## Manual installation
-1. Install via registering as a custom repository of HACS or by copying `extended_openai_conversation` folder into `<config directory>/custom_components`
+1. Copy `extended_openai_conversation` folder into `<config directory>/custom_components`
 2. Restart Home Assistant
    
 ## Installation via HACS

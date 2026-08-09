@@ -141,9 +141,11 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
             intent_response = intent.IntentResponse(language=user_input.language)
             try:
                 rendered_prompt = await self._render_prompt(user_input)
-                chat_log.content[0] = SystemContent(content=rendered_prompt)  # <-- rend le prompt visible dans le debug Assist
+                # Réécrit à chaque tour (le contenu dynamique — états, heure — change), sans toucher
+                # au reste de chat_log.content qui, lui, porte l'historique des tours précédents
+                chat_log.content[0] = SystemContent(content=rendered_prompt)
 
-                speech = await self._async_conversation_run(user_input, rendered_prompt)
+                speech = await self._async_conversation_run(chat_log, user_input.context)
                 chat_log.async_add_assistant_content_without_tools(
                     AssistantContent(agent_id=self.entity_id, content=speech)
                 )  # <-- sans ça, HA jette le chat_log car "aucun contenu assistant ajouté" (voir chat_log.py:131)
@@ -159,16 +161,20 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
                 conversation_id=user_input.conversation_id,
             )
 
-    async def _async_conversation_run(self, user_input: ConversationInput, rendered_prompt: str) -> str:
-        """Traite une requête de conversation et renvoie le texte final formulé par Mistral."""
+    async def _async_conversation_run(self, chat_log, context: Context | None) -> str:
+        """Reconstruit les messages Mistral depuis l'historique complet du chat_log (mémoire multi-tours) et interroge Mistral."""
         mistral_tools = [self._convert_to_mistral_tool(tool) for tool in self.tools]
 
+        # chat_log.content contient : le system prompt courant (position 0, toujours à jour),
+        # tous les tours précédents (user/assistant) de cette même conversation_id, et le tour
+        # utilisateur courant (ajouté automatiquement par async_get_chat_log avant qu'on arrive ici)
         messages = [
-            {"role": "system", "content": rendered_prompt},
-            {"role": "user", "content": user_input.text},
+            {"role": content.role, "content": content.content}
+            for content in chat_log.content
+            if content.content
         ]
 
-        return await self._query_mistral(messages, mistral_tools, n_calls=0, context=user_input.context)
+        return await self._query_mistral(messages, mistral_tools, n_calls=0, context=context)
 
     async def _query_mistral(
         self, messages: list[dict], mistral_tools: list[dict], n_calls: int, context: Context | None

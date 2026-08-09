@@ -8,6 +8,6 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "requirements": [],
-  "version": "1.0.17",
+  "version": "1.0.18",
   "config_flow": true
 }

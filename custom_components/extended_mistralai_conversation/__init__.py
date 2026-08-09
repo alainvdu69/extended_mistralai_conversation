@@ -7,13 +7,13 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .backup import read_json, write_json
-from .const import DOMAIN, DEFAULT_BACKUP_PATH
+from .const import DOMAIN, DEFAULT_BACKUP_PATH, DEFAULT_TOOLS_CONFIG_PATH
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ PLATFORMS = ["conversation"]
 
 SERVICE_EXPORT_OPTIONS = "export_options"
 SERVICE_IMPORT_OPTIONS = "import_options"
+SERVICE_GET_TOOLS = "get_tools"
 
 SERVICE_PATH_SCHEMA = vol.Schema(
     {vol.Optional("path", default=DEFAULT_BACKUP_PATH): cv.string}
@@ -40,7 +41,7 @@ def _get_single_entry(hass: HomeAssistant) -> ConfigEntry:
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up via configuration.yaml (legacy) + enregistrement des services (secours manuel)."""
+    """Set up via configuration.yaml (legacy) + enregistrement des services."""
 
     async def _handle_export(call: ServiceCall) -> None:
         entry = _get_single_entry(hass)
@@ -65,8 +66,31 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         hass.config_entries.async_update_entry(entry, options=options)
         _LOGGER.info("Options Extended Mistral AI Conversation importées depuis %s", path)
 
+    async def _handle_get_tools(call: ServiceCall) -> dict[str, Any]:
+        # Import tardif : évite un import circulaire au chargement du module (conversation.py
+        # importe déjà des choses de ce package)
+        from .conversation import ToolsConfigError, _load_tools_config
+
+        entry = _get_single_entry(hass)
+        tools_config_path = entry.options.get("tools_config_path", DEFAULT_TOOLS_CONFIG_PATH)
+        try:
+            tools = await hass.async_add_executor_job(_load_tools_config, tools_config_path)
+        except ToolsConfigError as e:
+            raise ServiceValidationError(str(e)) from e
+
+        return {
+            "count": len(tools),
+            "tools": [
+                {"name": t["name"], "description": t.get("description", ""), "type": t["function"]["type"]}
+                for t in tools
+            ],
+        }
+
     hass.services.async_register(DOMAIN, SERVICE_EXPORT_OPTIONS, _handle_export, schema=SERVICE_PATH_SCHEMA)
     hass.services.async_register(DOMAIN, SERVICE_IMPORT_OPTIONS, _handle_import, schema=SERVICE_PATH_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, SERVICE_GET_TOOLS, _handle_get_tools, supports_response=SupportsResponse.ONLY
+    )
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

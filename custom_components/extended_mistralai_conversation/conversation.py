@@ -34,9 +34,9 @@ REQUIRED_FUNCTION_KEYS = {
     "native": ["name"],
     "script": ["sequence"],
     "template": ["value_template"],
-    "rest": ["resource"],
-    "scrape": ["resource", "sensor"],
     "composite": ["sequence"],
+    # "rest" et "scrape" traités à part ci-dessous : resource / resource_template sont
+    # deux alternatives valides (voir functions/web.py::_get_rest_data)
 }
 
 
@@ -74,7 +74,15 @@ def _validate_tool(index: int, tool: dict[str, Any]) -> list[str]:
         )
         return errors
 
-    for required_key in REQUIRED_FUNCTION_KEYS[function_type]:
+    if function_type in ("rest", "scrape"):
+        if "resource" not in function_config and "resource_template" not in function_config:
+            errors.append(
+                f"{label} : function.resource ou function.resource_template manquant (requis pour le type '{function_type}')"
+            )
+        if function_type == "scrape" and "sensor" not in function_config:
+            errors.append(f"{label} : function.sensor manquant (requis pour le type 'scrape')")
+
+    for required_key in REQUIRED_FUNCTION_KEYS.get(function_type, []):
         if required_key not in function_config:
             errors.append(f"{label} : function.{required_key} manquant (requis pour le type '{function_type}')")
 

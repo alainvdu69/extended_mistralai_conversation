@@ -3,9 +3,11 @@
   "name": "Extended Mistral AI Conversation",
   "documentation": "https://github.com/alainvdu69/extended_mistralai_conversation",
   "issue_tracker": "https://github.com/alainvdu69/extended_mistralai_conversation/issues",
-  "codeowners": ["Alain Vaurain"],  
-  "requirements": ["aiohttp>=3.8.0", "pyyaml>=6.0"],
+  "codeowners": ["@alainvdu69"],
+  "dependencies": ["conversation"],
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": [],
   "version": "1.0.14",
-  "config_flow": true,
-  "platforms": ["conversation"]
+  "config_flow": true
 }

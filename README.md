@@ -19,12 +19,17 @@ Extended Mistrail AI Conversation uses Mistal AI API's feature like https://api.
 1. Open HACS in Home Assistant
 2. Right top clic on the 3 dots and add the personnal repo https://github.com/alainvdu69/extended_mistralai_conversation  as an Integration
 3. Add and go back to HACS main screen
-4. Find Extended MistalAI Conversation in the available list, select it and then add it
+4. Find Extended Mistal AI Conversation in the available list, select it and then add it
 5. Restart Home Assistant
+
+## Create a Mistral API key
+1. Sign up at mistral.ai
+2. Go to console.mistral.ai/api-keys
+2. Click Create new key and copy it immediately
 
 ## Configuration
 1. Settings → Devices & Services → + Add Integration
-2. Sarch for Extended Mistral AI Conversation
+2. Search for Extended Mistral AI Conversation
 4. Enter your API key → Submit
 5. Follow the instructions on screen to complete the setup (API Key is required).
     - [Generating an API Key](https://www.home-assistant.io/integrations/openai_conversation/#generate-an-api-key)

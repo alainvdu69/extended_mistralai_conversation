@@ -1,8 +1,6 @@
 get_tools:
   name: Get Mistral Tools
-  description: Récupère la liste des tools configurés pour Mistral.
-  fields:
-    # Pas de champs nécessaires
+  description: Récupère la liste des tools actuellement configurés pour Mistral (nom, description, type).
 
 export_options:
   name: Exporter les options

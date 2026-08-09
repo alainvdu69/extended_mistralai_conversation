@@ -18,7 +18,7 @@ from homeassistant.components.conversation import (
 from homeassistant.components.homeassistant.exposed_entities import async_should_expose
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import MATCH_ALL
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import intent
@@ -26,6 +26,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.chat_session import async_get_chat_session
 from homeassistant.helpers.template import Template
 from homeassistant.util import dt as dt_util
+
+from .functions import get_function
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -166,10 +168,10 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
             {"role": "user", "content": user_input.text},
         ]
 
-        return await self._query_mistral(messages, mistral_tools, n_calls=0)
+        return await self._query_mistral(messages, mistral_tools, n_calls=0, context=user_input.context)
 
     async def _query_mistral(
-        self, messages: list[dict], mistral_tools: list[dict], n_calls: int
+        self, messages: list[dict], mistral_tools: list[dict], n_calls: int, context: Context | None
     ) -> str:
         """Appelle Mistral, exécute les tool_calls demandés, et relance jusqu'à obtenir une réponse texte."""
         headers = {
@@ -207,7 +209,7 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
         for tool_call in tool_calls:
             function_name = tool_call["function"]["name"]
             arguments = json.loads(tool_call["function"]["arguments"])
-            result_text = await self._execute_function(function_name, arguments)
+            result_text = await self._execute_function(function_name, arguments, context)
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call["id"],
@@ -216,72 +218,40 @@ class MistralConversationAgent(ConversationEntity, conversation.AbstractConversa
             })
 
         # On relance Mistral avec les résultats, pour qu'il formule la réponse finale
-        return await self._query_mistral(messages, mistral_tools, n_calls + 1)
+        return await self._query_mistral(messages, mistral_tools, n_calls + 1, context)
 
-    async def _execute_function(self, function_name: str, arguments: dict) -> str:
-        """Exécute une fonction demandée par Mistral et renvoie un message texte (succès ou erreur)."""
-        if function_name == "execute_services":
-            # Vérifier les permissions pour execute_services
-            for service_call in arguments["list"]:
-                domain = service_call["domain"]
-                service = service_call["service"]
-
-                if domain not in self.allowed_domains:
-                    return f"Le domaine {domain} n'est pas autorisé."
-
-                if service not in self.allowed_services.get(domain, []):
-                    return f"Le service {service} pour le domaine {domain} n'est pas autorisé."
-
-                # Exécuter le service
-                service_data = service_call.get("service_data", {})
-                await self.hass.services.async_call(
-                    domain,
-                    service,
-                    service_data
-                )
-
-            return "Action réalisée avec succès."
-
-        # Gérer les autres outils (assist_timer, add_event, etc.)
-        tool_config = next(
-            (t for t in self.tools if t["name"] == function_name),
-            None
-        )
+    async def _execute_function(self, function_name: str, arguments: dict, context: Context | None) -> str:
+        """Trouve la config du tool et délègue à l'exécuteur du type correspondant (native/script/template/rest/scrape/composite)."""
+        tool_config = next((t for t in self.tools if t["name"] == function_name), None)
         if not tool_config:
             return f"Tool {function_name} non trouvé."
 
-        rendered_data = self._render_template(
-            tool_config["function"]["sequence"][0]["data"],
-            arguments
-        )
+        function_config = tool_config["function"]
+        function_type = function_config.get("type", "template")
 
-        if tool_config["function"]["type"] == "script":
-            await self.hass.services.async_call(
-                "script",
-                tool_config["function"]["sequence"][0]["action"].split(".")[1],
-                rendered_data
+        # Garde-fou spécifique à execute_service : liste blanche domaines/services.
+        # Absent de extended_openai_conversation, conservé ici car c'était déjà votre logique.
+        if function_type == "native" and function_config.get("name") == "execute_service":
+            for service_call in arguments.get("list", []):
+                domain = service_call["domain"]
+                service = service_call["service"]
+                if domain not in self.allowed_domains:
+                    return f"Le domaine {domain} n'est pas autorisé."
+                if service not in self.allowed_services.get(domain, []):
+                    return f"Le service {service} pour le domaine {domain} n'est pas autorisé."
+
+        try:
+            executor = get_function(function_type)
+            result = await executor.execute(
+                self.hass, function_config, arguments, context, self._get_exposed_entities()
             )
-        elif tool_config["function"]["type"] == "service":
-            await self.hass.services.async_call(
-                tool_config["function"]["domain"],
-                tool_config["function"]["service"],
-                rendered_data
-            )
+        except Exception as e:
+            _LOGGER.error(f"Erreur lors de l'exécution de {function_name} ({function_type}): {e}")
+            return f"Erreur : {e}"
 
-        return "Action réalisée avec succès."
-
-    def _render_template(self, template_data: dict, arguments: dict) -> dict:
-        """Rend un template Jinja2 avec les arguments fournis."""
-        rendered = {}
-        for key, value in template_data.items():
-            if isinstance(value, str) and ("{{" in value or "{%" in value):
-                # C'est un template Jinja2 — area_entities() est déjà disponible nativement
-                # dans l'environnement Jinja de HA, pas besoin de l'injecter manuellement
-                template = Template(value, self.hass)
-                rendered[key] = template.async_render(variables=arguments)
-            else:
-                rendered[key] = value
-        return rendered
+        if isinstance(result, str):
+            return result
+        return json.dumps(result, default=str, ensure_ascii=False)
 
     async def _render_prompt(self, user_input: ConversationInput | None = None) -> str:
         """Rend le prompt complet avec Jinja2."""

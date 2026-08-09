@@ -1,9 +1,9 @@
 # Extended MistalAI Conversation
-This is custom component of Home Assistant.
+This is a custom component of Home Assistant.
 
-Derived from [Extended OpenAI Conversation]([https://www.home-assistant.io/integrations/openai_conversation/](https://github.com/jekalmin/extended_openai_conversation) and adapted to specific Mistal AI
+Derived from [Extended OpenAI Conversation]([https://www.home-assistant.io/integrations/openai_conversation/](https://github.com/jekalmin/extended_openai_conversation) and adapted to specific Mistal AI API
 
-## Features (not much as OpenAI)
+## Features (not much as EOC)
 - Ability to call service of Home Assistant
 - Ability to get data from external API or web page
 - Ability to retrieve state history of entities
@@ -11,20 +11,25 @@ Derived from [Extended OpenAI Conversation]([https://www.home-assistant.io/integ
 ## How it works
 Extended Mistrail AI Conversation uses Mistal AI API's feature like https://api.mistral.ai/v1/chat/completions .
 
---> to be updated
-Since OpenAI models already know how to call service of Home Assistant in general, you just have to let model know what devices you have by [exposing entities](https://github.com/jekalmin/extended_openai_conversation#preparation)
-
-## Installation
+## Manual installation
 1. Install via registering as a custom repository of HACS or by copying `extended_openai_conversation` folder into `<config directory>/custom_components`
 2. Restart Home Assistant
-3. Go to Settings > Devices & Services.
-4. In the bottom right corner, select the Add Integration button.
-5. Follow the instructions on screen to complete the setup (API Key is required).
+   
+## Installation via HACS
+1. Open HACS in Home Assistant
+2. Right top clic on the 3 dots and add the personnal repo https://github.com/alainvdu69/extended_mistralai_conversation  as an Integration
+3. Add and go back to HACS main screen
+4. Find Extended MistalAI Conversation in the available list, select it and then add it
+5. Restart Home Assistant
+
+## Configuration   
+7. In the bottom right corner, select the Add Integration button.
+8. Follow the instructions on screen to complete the setup (API Key is required).
     - [Generating an API Key](https://www.home-assistant.io/integrations/openai_conversation/#generate-an-api-key)
     - Specify "Base Url" if using OpenAI compatible servers like Azure OpenAI (also with APIM), LocalAI, otherwise leave as it is.
-6. Go to Settings > [Voice Assistants](https://my.home-assistant.io/redirect/voice_assistants/).
-7. Click to edit Assistant (named "Home Assistant" by default).
-8. Select "Extended OpenAI Conversation" from "Conversation agent" tab.
+9. Go to Settings > [Voice Assistants](https://my.home-assistant.io/redirect/voice_assistants/).
+10. Click to edit Assistant (named "Home Assistant" by default).
+11. Select "Extended OpenAI Conversation" from "Conversation agent" tab.
     <details>
 
     <summary>guide image</summary>

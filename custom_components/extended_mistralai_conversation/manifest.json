@@ -4,10 +4,10 @@
   "documentation": "https://github.com/alainvdu69/extended_mistralai_conversation",
   "issue_tracker": "https://github.com/alainvdu69/extended_mistralai_conversation/issues",
   "codeowners": ["@alainvdu69"],
-  "dependencies": ["conversation"],
+  "dependencies": ["conversation", "recorder", "rest", "scrape"],
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "requirements": [],
-  "version": "1.0.14",
+  "version": "1.0.15",
   "config_flow": true
 }

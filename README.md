@@ -22,9 +22,11 @@ Extended Mistrail AI Conversation uses Mistal AI API's feature like https://api.
 4. Find Extended MistalAI Conversation in the available list, select it and then add it
 5. Restart Home Assistant
 
-## Configuration   
-7. In the bottom right corner, select the Add Integration button.
-8. Follow the instructions on screen to complete the setup (API Key is required).
+## Configuration
+1. Settings → Devices & Services → + Add Integration
+2. Sarch for Extended Mistral AI Conversation
+4. Enter your API key → Submit
+5. Follow the instructions on screen to complete the setup (API Key is required).
     - [Generating an API Key](https://www.home-assistant.io/integrations/openai_conversation/#generate-an-api-key)
     - Specify "Base Url" if using OpenAI compatible servers like Azure OpenAI (also with APIM), LocalAI, otherwise leave as it is.
 9. Go to Settings > [Voice Assistants](https://my.home-assistant.io/redirect/voice_assistants/).

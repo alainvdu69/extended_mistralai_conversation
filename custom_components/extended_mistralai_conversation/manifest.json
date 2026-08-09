@@ -1,8 +1,8 @@
 {
   "domain": "extended_mistralai_conversation",
   "name": "Extended Mistral AI Conversation",
-  "documentation": "https://github.com/ton-depot/extended_mistralai_conversation",
-  "issue_tracker": "https://github.com/ton-depot/extended_mistralai_conversation/issues",
+  "documentation": "https://github.com/alainvdu69/extended_mistralai_conversation",
+  "issue_tracker": "https://github.com/alainvdu69/extended_mistralai_conversation/issues",
   "codeowners": ["Alain Vaurain"],  
   "requirements": ["aiohttp>=3.8.0", "pyyaml>=6.0"],
   "version": "1.0.13",

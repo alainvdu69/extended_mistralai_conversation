@@ -27,21 +27,21 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-async def _async_write_backup(hass: HomeAssistant, options: dict[str, Any]) -> None:
+async def _async_write_backup(hass: HomeAssistant, path: str, options: dict[str, Any]) -> None:
     """Écrit les options courantes dans le fichier de backup (best-effort : n'empêche jamais la validation)."""
     try:
-        await hass.async_add_executor_job(write_json, DEFAULT_BACKUP_PATH, options)
+        await hass.async_add_executor_job(write_json, path, options)
     except OSError as e:
-        # Best-effort : une install "Core" sans /backup ne doit pas bloquer la sauvegarde de l'entrée.
-        _LOGGER.warning("Impossible d'écrire le backup des options vers %s : %s", DEFAULT_BACKUP_PATH, e)
+        # Best-effort : un chemin non accessible ne doit pas bloquer la sauvegarde de l'entrée.
+        _LOGGER.warning("Impossible d'écrire le backup des options vers %s : %s", path, e)
     else:
-        _LOGGER.info("Backup des options écrit avec succès vers %s", DEFAULT_BACKUP_PATH)
+        _LOGGER.info("Backup des options écrit avec succès vers %s", path)
 
 
-async def _async_read_backup(hass: HomeAssistant) -> dict[str, Any]:
+async def _async_read_backup(hass: HomeAssistant, path: str) -> dict[str, Any]:
     """Lit le fichier de backup s'il existe, sinon renvoie un dict vide."""
     try:
-        return await hass.async_add_executor_job(read_json, DEFAULT_BACKUP_PATH)
+        return await hass.async_add_executor_job(read_json, path)
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -57,7 +57,7 @@ class MistralAIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         # Chargé une seule fois par tentative de flow, réutilisé entre l'affichage du formulaire et sa validation
         if not hasattr(self, "_backup_options"):
-            self._backup_options = await _async_read_backup(self.hass)
+            self._backup_options = await _async_read_backup(self.hass, DEFAULT_BACKUP_PATH)
 
         if user_input is None:
             return self.async_show_form(
@@ -72,17 +72,19 @@ class MistralAIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
             )
 
+        backup_path = self._backup_options.get("backup_path", DEFAULT_BACKUP_PATH)
         options = {
             "model": user_input.get("model", DEFAULT_MODEL),
             "tools_config_path": self._backup_options.get("tools_config_path", DEFAULT_TOOLS_CONFIG_PATH),
             "prompt_path": self._backup_options.get("prompt_path", DEFAULT_PROMPT_PATH),
             "allowed_domains": self._backup_options.get("allowed_domains", DEFAULT_ALLOWED_DOMAINS),
             "allowed_services": self._backup_options.get("allowed_services", DEFAULT_ALLOWED_SERVICES),
+            "backup_path": backup_path,
         }
 
         # "Valider" cliqué : sauvegarde systématique. Rien n'est écrit si on ferme via la croix,
         # puisque ce code n'est atteint que lorsque HA appelle ce step avec un user_input rempli.
-        await _async_write_backup(self.hass, options)
+        await _async_write_backup(self.hass, backup_path, options)
 
         return self.async_create_entry(
             title="Extended Mistral AI Conversation",
@@ -134,9 +136,11 @@ class MistralOptionsFlowHandler(config_entries.OptionsFlow):
                     "prompt_path": user_input["prompt_path"],
                     "allowed_domains": allowed_domains,
                     "allowed_services": allowed_services,
+                    "backup_path": user_input["backup_path"],
                 }
-                # "Valider" cliqué : sauvegarde systématique (pas d'écriture si on ferme via la croix)
-                await _async_write_backup(self.hass, options)
+                # "Valider" cliqué : sauvegarde systématique (pas d'écriture si on ferme via la croix).
+                # Écrit vers le NOUVEAU backup_path si l'utilisateur vient de le changer dans ce même formulaire.
+                await _async_write_backup(self.hass, options["backup_path"], options)
                 return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
@@ -164,6 +168,10 @@ class MistralOptionsFlowHandler(config_entries.OptionsFlow):
                             sort_keys=False,
                         ),
                     ): TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT, multiline=True)),
+                    vol.Optional(
+                        "backup_path",
+                        default=current.get("backup_path", DEFAULT_BACKUP_PATH),
+                    ): str,
                 }
             ),
             errors=errors,

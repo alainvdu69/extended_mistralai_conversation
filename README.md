@@ -9,7 +9,8 @@ Derived from [Extended OpenAI Conversation]([https://www.home-assistant.io/integ
 - Ability to retrieve state history of entities
 
 ## How it works
-Extended Mistrail AI Conversation uses Mistal AI API's feature like https://api.mistral.ai/v1/chat/completions .
+Extended Mistrail AI Conversation uses Mistal AI API's feature like https://api.mistral.ai/v1/chat/completions.
+You can create scripts that Mistral AI can execute when their description match (see the content of mistral_tools.yaml)
 
 ## Manual installation
 1. Copy `extended_openai_conversation` folder into `<config directory>/custom_components`

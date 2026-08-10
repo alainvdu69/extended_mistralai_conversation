@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import shutil
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -23,6 +25,10 @@ from .mistral_agent import MistralConversationAgent
 _LOGGER = logging.getLogger(__name__)
 
 NOTIFICATION_ID = "extended_mistralai_conversation_tools_error"
+
+# Modèles livrés avec l'intégration (dossier default_config/, voyage avec le dépôt/HACS),
+# copiés vers /config UNIQUEMENT s'il n'existe pas déjà de fichier à cet emplacement.
+DEFAULT_CONFIG_DIR = Path(__file__).parent / "default_config"
 
 # Types de fonctions supportés par functions/__init__.py (FUNCTIONS) — tenu à jour manuellement,
 # sqlite/bash/read_file/write_file volontairement laissés de côté pour le moment.
@@ -136,6 +142,19 @@ def _load_prompt_template(path: str) -> str:
         return ""
 
 
+def _ensure_default_file(target_path: str, source_path: Path) -> None:
+    """Copie le fichier modèle vers target_path UNIQUEMENT s'il n'existe pas déjà
+    (fonction synchrone, à exécuter via l'executor). Ne touche jamais à un fichier
+    déjà présent — pas d'écrasement d'une config personnalisée.
+    """
+    target = Path(target_path)
+    if target.exists():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source_path, target)
+    _LOGGER.info("%s : première installation, %s créé à partir du modèle par défaut", DOMAIN, target)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -144,14 +163,24 @@ async def async_setup_entry(
     """Set up the Mistral AI conversation platform."""
     api_key = entry.data.get("api_key")
     model = entry.options.get("model", DEFAULT_MODEL)
-    tools_config_path = entry.options.get("tools_config_path", DEFAULT_TOOLS_CONFIG_PATH)
-    prompt_path = entry.options.get("prompt_path", DEFAULT_PROMPT_PATH)
+    # hass.config.path() résout un chemin relatif par rapport à /config, et laisse un
+    # chemin déjà absolu inchangé — gère donc les deux cas correctement (contrairement
+    # à un open() direct sur un chemin relatif, qui dépend du cwd du process HA).
+    tools_config_path = hass.config.path(entry.options.get("tools_config_path", DEFAULT_TOOLS_CONFIG_PATH))
+    prompt_path = hass.config.path(entry.options.get("prompt_path", DEFAULT_PROMPT_PATH))
     allowed_domains = entry.options.get("allowed_domains", DEFAULT_ALLOWED_DOMAINS)
     allowed_services = entry.options.get("allowed_services", DEFAULT_ALLOWED_SERVICES)
 
     if not api_key:
         _LOGGER.error("API key for Mistral AI is not configured.")
         return
+
+    await hass.async_add_executor_job(
+        _ensure_default_file, tools_config_path, DEFAULT_CONFIG_DIR / "mistral_tools.yaml"
+    )
+    await hass.async_add_executor_job(
+        _ensure_default_file, prompt_path, DEFAULT_CONFIG_DIR / "mistral_prompt.txt"
+    )
 
     prompt_template = await hass.async_add_executor_job(_load_prompt_template, prompt_path)
 

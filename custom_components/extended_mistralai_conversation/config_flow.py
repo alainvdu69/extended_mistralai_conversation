@@ -34,6 +34,8 @@ async def _async_write_backup(hass: HomeAssistant, options: dict[str, Any]) -> N
     except OSError as e:
         # Best-effort : une install "Core" sans /backup ne doit pas bloquer la sauvegarde de l'entrée.
         _LOGGER.warning("Impossible d'écrire le backup des options vers %s : %s", DEFAULT_BACKUP_PATH, e)
+    else:
+        _LOGGER.info("Backup des options écrit avec succès vers %s", DEFAULT_BACKUP_PATH)
 
 
 async def _async_read_backup(hass: HomeAssistant) -> dict[str, Any]:

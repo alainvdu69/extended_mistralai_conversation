@@ -24,7 +24,7 @@ SERVICE_IMPORT_OPTIONS = "import_options"
 SERVICE_GET_TOOLS = "get_tools"
 
 SERVICE_PATH_SCHEMA = vol.Schema(
-    {vol.Optional("path", default=DEFAULT_BACKUP_PATH): cv.string}
+    {vol.Optional("path"): cv.string}
 )
 
 
@@ -45,8 +45,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def _handle_export(call: ServiceCall) -> None:
         entry = _get_single_entry(hass)
-        path = call.data["path"]
-        # data (api_key) volontairement exclu : /backup peut être synchronisé
+        # Défaut résolu ici (pas dans le schéma) : suit backup_path si modifié via l'Options Flow,
+        # plutôt que de rester figé sur la constante d'origine.
+        path = call.data.get("path") or entry.options.get("backup_path", DEFAULT_BACKUP_PATH)
+        # data (api_key) volontairement exclu : /share peut être synchronisé
         # vers un cloud, on ne veut pas y laisser le token en clair.
         try:
             await hass.async_add_executor_job(write_json, path, dict(entry.options))
@@ -56,7 +58,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def _handle_import(call: ServiceCall) -> None:
         entry = _get_single_entry(hass)
-        path = call.data["path"]
+        path = call.data.get("path") or entry.options.get("backup_path", DEFAULT_BACKUP_PATH)
         try:
             options = await hass.async_add_executor_job(read_json, path)
         except (OSError, json.JSONDecodeError) as e:

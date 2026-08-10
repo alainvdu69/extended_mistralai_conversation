@@ -1,0 +1,130 @@
+tools:
+  - name: add_event
+    description: "Ajoute un événement ou rendez-vous ou rappel à mon agenda. Si plusieurs jours sont concernés, ne faire qu'un seul appel qui englobe tous les jours."
+    parameters:
+      type: object
+      properties:
+        title:
+          type: string
+          description: "Le titre de l'événement"
+        start_time:
+          type: string
+          description: "L'heure de début de l'événement au format ISO 8601 (ex: 2026-08-06T14:00:00)"
+        end_time:
+          type: string
+          description: "L'heure de fin de l'événement au format ISO 8601. Si omis, ajouter 30 minutes à start_time."
+      required:
+        - title
+        - start_time
+    function:
+      type: script
+      sequence:
+        - service: calendar.create_event
+          data:
+            summary: "{{ title }}"
+            start_date_time: "{{ start_time }}"
+            end_date_time: >-
+              {% if end_time %}
+                {{ end_time }}
+              {% else %}
+                {{ (as_datetime(start_time) + timedelta(minutes=30)).isoformat() }}
+              {% endif %}
+          target:
+            entity_id: calendar.alain_vautrain_gmail_com
+
+  - name: assist_timer
+    description: "Démarre un rappel ou timer pour le four, la plaque, ou un usage générique. Si une date de fin est donnée, calcule la durée en heures/minutes/secondes par rapport à maintenant."
+    parameters:
+      type: object
+      properties:
+        heures:
+          type: integer
+          description: "Durée du timer en heures (0 si non précisé)"
+        minutes:
+          type: integer
+          description: "Durée du timer en minutes (0 si non précisé)"
+        secondes:
+          type: integer
+          description: "Durée du timer en secondes (0 si non précisé)"
+        texte:
+          type: string
+          description: "Sujet du rappel (ex: 'four', 'plaque')"
+        satellite_id:
+          type: string
+          description: "L'identifiant exact du satellite courant. Ne jamais l'inventer."
+        salle_cible:
+          type: string
+          description: "Salle où annoncer le timer (ex: 'Salon'). Laisser vide si non précisé."
+          enum:
+            - Salon
+            - Salle à manger
+            - Chambre Christophe
+      required:
+        - heures
+        - minutes
+        - secondes
+        - texte
+        - satellite_id
+    function:
+      type: script
+      sequence:
+        - action: script.assist_timer
+          data:
+            heures: "{{ heures }}"
+            minutes: "{{ minutes }}"
+            secondes: "{{ secondes }}"
+            texte: "{{ texte }}"
+            satellite_id: >-
+              {% set target = salle_cible | default('') %}
+              {% set candidats = area_entities(target) | select('match', 'assist_satellite\\.') | list %}
+              {{ candidats[0] if candidats else satellite_id }}
+
+  - name: execute_services
+    description: "Exécute un ou plusieurs services Home Assistant. Utilise cette fonction UNIQUEMENT si aucune autre fonction ne correspond à la demande."
+    parameters:
+      type: object
+      properties:
+        list:
+          type: array
+          items:
+            type: object
+            properties:
+              domain:
+                type: string
+                description: "Domaine du service (ex: 'light', 'cover')"
+              service:
+                type: string
+                description: "Service à appeler (ex: 'turn_on', 'close_cover')"
+              service_data:
+                type: object
+                description: "Données du service (ex: entity_id, position, etc.)"
+                properties:
+                  entity_id:
+                    type: array
+                    items:
+                      type: string
+                    description: "Liste des entités cibles"
+            required:
+              - domain
+              - service
+              - service_data
+    function:
+      type: native
+      name: execute_service
+
+  - name: get_weather
+    description: Donne la météo prévue sur une ville que je te donne. Si je ne donne pas de ville, tu dois utiliser la ville de Lyon.
+    parameters:
+      type: object
+      properties:
+        city_id:
+          type: string
+          description: City of the weather forecast.
+      required:
+        - city_id
+    function:
+      type: rest
+      # Remplacez REMPLACER_PAR_VOTRE_CLE par votre clé Tomorrow.io réelle après avoir copié ce
+      # fichier vers /config — ne committez jamais de vraie clé API dans ce dépôt.
+      resource_template: "https://api.tomorrow.io/v4/weather/forecast?location={{city_id}}&timesteps=1d&apikey=REMPLACER_PAR_VOTRE_CLE"
+      value_template: '{{value_json}}'

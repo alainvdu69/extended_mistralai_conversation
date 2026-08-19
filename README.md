@@ -3,7 +3,7 @@ This is a custom component for Home Assistant.
 
 Derived from [Extended OpenAI Conversation]([https://www.home-assistant.io/integrations/openai_conversation/](https://github.com/jekalmin/extended_openai_conversation) and adapted to specific Mistal AI API
 
-## Features (not much as EOC)
+## Features
 - Ability to call service of Home Assistant
 - Ability to get data from external API or web page
 - Ability to retrieve state history of entities
@@ -37,61 +37,19 @@ You can create scripts that Mistral AI can execute when their description match 
 4. Search for Extended Mistral AI Conversation
 5. Enter your API key → Submit
 6. Review & adapt the other config params to your needs
-9. Follow the instructions on screen to complete the setup (API Key is required).
-    - [Generating an API Key](https://www.home-assistant.io/integrations/openai_conversation/#generate-an-api-key)
-    - Specify "Base Url" if using OpenAI compatible servers like Azure OpenAI (also with APIM), LocalAI, otherwise leave as it is.
-10. Go to Settings > [Voice Assistants](https://my.home-assistant.io/redirect/voice_assistants/).
+7. Validate
+8. Go to Settings > [Voice Assistants](https://my.home-assistant.io/redirect/voice_assistants/).
 11. Click to edit Assistant (named "Home Assistant" by default).
-12. Select "Extended OpenAI Conversation" from "Conversation agent" tab.
-    <details>
-
-    <summary>guide image</summary>
-    <img width="500" alt="스크린샷 2023-10-07 오후 6 15 29" src="https://github.com/jekalmin/extended_openai_conversation/assets/2917984/0849d241-0b82-47f6-9956-fdb82d678aca">
-
-    </details>
-
-## Preparation
+12. Select "Extended MistralAI Conversation" from "Conversation agent" tab.
+    
+## Final step
 After installed, you need to expose entities from "http://{your-home-assistant}/config/voice-assistants/expose".
-
-## Examples
-### 1. Turn on single entity
-https://github.com/jekalmin/extended_openai_conversation/assets/2917984/938dee95-8907-44fd-9fb8-dc8cd559fea2
-
-### 2. Turn on multiple entities
-https://github.com/jekalmin/extended_openai_conversation/assets/2917984/528f5965-94a7-4cbe-908a-e24f7bbb0a93
-
-### 3. Hook with custom notify function
-https://github.com/jekalmin/extended_openai_conversation/assets/2917984/4a575ee7-0188-41eb-b2db-6eab61499a99
-
-### 4. Add automation
-https://github.com/jekalmin/extended_openai_conversation/assets/2917984/04b93aa6-085e-450a-a554-34c1ed1fbb36
-
-### 5. Play Netflix 
-https://github.com/jekalmin/extended_openai_conversation/assets/2917984/64ba656e-3ae7-4003-9956-da71efaf06dc
-
-## Configuration
-### Options
-By clicking a button from Edit Assist, Options can be customized.<br/>
-Options include [OpenAI Conversation](https://www.home-assistant.io/integrations/openai_conversation/) options and two new options. 
-
-- `Attach Username`: Pass the active user's name (if applicable) to OpenAI via the message payload. Currently, this only applies to conversations through the UI or REST API.
-
-- `Maximum Function Calls Per Conversation`: limit the number of function calls in a single conversation.
-(Sometimes function is called over and over again, possibly running into infinite loop) 
-- `Functions`: A list of mappings of function spec to function.
-  - `spec`: Function which would be passed to [functions](https://platform.openai.com/docs/api-reference/chat/create#chat-create-functions) of [chat API](https://platform.openai.com/docs/api-reference/chat/create).
-  - `function`: function that will be called.
-
-
-| Edit Assist                                                                                                                                  | Options                                                                                                                                                                       |
-|----------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| <img width="608" alt="1" src="https://github.com/jekalmin/extended_openai_conversation/assets/2917984/bb394cd4-5790-4ac9-9311-dbcab0fcca56"> | <img width="591" alt="스크린샷 2023-10-10 오후 10 53 57" src="https://github.com/jekalmin/extended_openai_conversation/assets/2917984/431e4bc5-87a0-4d7b-8da0-6273f955877f"> |
 
 
 ### Functions
 
 #### Supported function types
-- `native`: built-in function provided by "extended_openai_conversation".
+- `native`: built-in function provided by "extended_mistrlai_conversation".
   - Currently supported native functions and parameters are:
     - `execute_service`
       - `domain`(string): domain to be passed to `hass.services.async_call`
@@ -100,8 +58,6 @@ Options include [OpenAI Conversation](https://www.home-assistant.io/integrations
         - `entity_id`(string): target entity
         - `device_id`(string): target device
         - `area_id`(string): target area
-    - `add_automation`
-      - `automation_config`(string): An automation configuration in a yaml format
     - `get_history`
       - `entity_ids`(list): a list of entity ids to filter
       - `start_time`(string): defaults to 1 day before the time of the request. It determines the beginning of the period

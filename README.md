@@ -19,7 +19,7 @@ You can create scripts that Mistral AI can execute when their description match 
    
 ## Installation via HACS
 1. Open HACS in Home Assistant
-2. Right top clic on the 3 dots and add the personnal repo https://github.com/alainvdu69/extended_mistralai_conversation  as an Integration
+2. Right top clic on the 3 dots and add the personnal repo https://github.com/alainvtr/extended_mistralai_conversation  as an Integration
 3. Add and go back to HACS main screen
 4. Find Extended Mistal AI Conversation in the available list, select it and then add it
 5. Restart Home Assistant
@@ -49,7 +49,7 @@ After installed, you need to expose entities from "http://{your-home-assistant}/
 ### Functions
 
 #### Supported function types
-- `native`: built-in function provided by "extended_mistrlai_conversation".
+- `native`: built-in function provided by "extended_mistralai_conversation".
   - Currently supported native functions and parameters are:
     - `execute_service`
       - `domain`(string): domain to be passed to `hass.services.async_call`

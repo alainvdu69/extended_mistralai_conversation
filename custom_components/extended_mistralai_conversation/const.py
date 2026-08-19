@@ -1,7 +1,7 @@
 """Constants for the Extended Mistral AI Conversation integration."""
 DOMAIN = "extended_mistralai_conversation"
 DEFAULT_NAME = "Extended Mistral AI Conversation"
-DEFAULT_MODEL = "mistral-medium"
+DEFAULT_MODEL = "mistral-small"
 DEFAULT_TOOLS_CONFIG_PATH = "mistral_tools.yaml"
 DEFAULT_PROMPT_PATH = "mistral_prompt.txt"
 DEFAULT_ALLOWED_DOMAINS = ["light", "cover", "script", "media_player"]
